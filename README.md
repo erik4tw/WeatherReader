@@ -81,7 +81,11 @@ The exact rules are documented in [`MetarParser.h`](MetarParser.h) and [`Display
 1. Download `WeatherReader.dll` (Release build, 32-bit) from the
    [Releases](../../releases) page.
 2. In EuroScope open **Other SET > Plug-ins**, click **Load** and select the DLL.
-3. The box appears in the standard radar screen and in the ground radar. Drag it to where you want it; the
+3. **Allow the plugin to draw on the radar screens (required, once):** select *WeatherReader* in the plug-in list. In the
+   box **Forbidden to draw on types** (right) select *Standard ES radar screen* and *Ground Radar display* and move them
+   to **Allowed to draw on types** (left) with the **<<** button. Without this the box is not shown. EuroScope saves
+   the setting when you close it (with your settings, as for any other plug-in).
+4. The box appears in the standard radar screen and in the ground radar. Drag it to where you want it; the
    position and the collapsed state are saved per screen type in your EuroScope settings.
 
 > **If EuroScope cannot load the DLL:** Windows may have marked the downloaded file as blocked. Right-click
