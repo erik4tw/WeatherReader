@@ -4,6 +4,7 @@
 // (e.g. "VMC"), a small note (e.g. "RRS POSSIBLE"), the wind components per runway and a line
 // with the values.
 // The box is at least 140 pixels wide and grows if the header, note or value line need more room.
+// If the METAR has RVR groups, one or more bold rows with them follow below the wind/QNH row (expanded only).
 // An arrow at the top right of the header collapses and expands the box;
 // when collapsed only the header (with ATIS letter) and the wind/QNH row are visible.
 //
@@ -34,6 +35,10 @@ public:
 	// right (e.g. "Q1019"). Either may be empty; both empty = no row. Must be called after SetContent()
 	// because SetContent() clears them.
 	void SetInfo(const char* sWind, const char* sQnh);
+
+	// Sets the RVR rows (e.g. "R25L/P2000N R25R/1200N", one string per row) shown in bold below the wind/QNH row, only
+	// while the box is expanded. Empty = no rows. Must be called after SetContent() because SetContent() clears them.
+	void SetRvr(const std::vector<std::string>& lines);
 
 	// Sets the ATIS information letter(s) shown in bold at the left of the header (e.g. "K" or "D:K A:L").
 	// Empty = none. Must be called after SetContent() because SetContent() clears it.
@@ -114,6 +119,8 @@ private:
 	ULONGLONG   m_QnhFlashEnd;
 
 	std::string m_sAtis;		// ATIS letter(s) at the left of the header
+
+	std::vector<std::string> m_RvrLines;	// RVR rows (expanded only)
 
 	std::string m_sWind;		// wind group in the row above the large text
 	std::string m_sQnh;			// QNH in the row above the large text

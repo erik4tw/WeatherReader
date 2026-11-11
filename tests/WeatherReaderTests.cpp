@@ -587,10 +587,10 @@ static void TestDetail()
 	CHECK_TEXT(BuildDetail(AssessMetar("EDDM 121250Z AUTO 13003KT 9999 -SN BKN012 00/M01 Q1016")),
 		"CEIL 1200" + dot + "VIS 9999" + dot + "SN");
 	CHECK_TEXT(BuildDetail(AssessMetar("EDDM 112220Z AUTO 07001KT 0800 0400 R26R/1200D R26L/0550N NCD M11/M11 Q1024")),
-		"RVR 550");
+		"NO CEIL" + dot + "VIS 800");		// LVO caused by the RVR alone: the RVR is not part of the detail line
 	CHECK_TEXT(BuildDetail(AssessMetar("EDDM 112220Z AUTO 07001KT 9999 VV/// M11/M11 Q1024")), "CEIL ///");
 	CHECK_TEXT(BuildDetail(AssessMetar("EDDM 112220Z AUTO 07001KT 9999 VV001 R26L/0500N M11/M11 Q1024")),
-		"RVR 500" + dot + "CEIL 100");
+		"CEIL 100");
 	CHECK_TEXT(BuildDetail(AssessMetar("EDDM 121250Z AUTO 13003KT 9999 NCD 00/M01 Q1016")),
 		"NO CEIL" + dot + "VIS 9999");
 	CHECK_TEXT(BuildDetail(AssessMetar("EDDM 121250Z AUTO 13003KT 4000 BR NCD 00/M01 Q1016")),
@@ -602,6 +602,70 @@ static void TestDetail()
 
 	// cannot be evaluated: empty
 	CHECK_TEXT(BuildDetail(AssessMetar("EDDF 061820Z 21003KT 04/02 Q1023")), "");
+}
+
+// ---------------------------------------------------------------------
+// RVR rows
+// ---------------------------------------------------------------------
+
+static std::string Join(const std::vector<std::string>& lines)
+{
+	std::string result;
+	for (size_t i = 0; i < lines.size(); i++)
+		result += (i > 0 ? "|" : "") + lines[i];
+	return result;
+}
+
+static void TestRvrRows()
+{
+	std::vector<std::string> none;
+	std::vector<std::string> l25L(1, "25L");
+	std::vector<std::string> l25LR; l25LR.push_back("25L"); l25LR.push_back("25R");
+
+	// groups are stored as written, with runway number and side
+	MetarAssessment a = AssessMetar("EDDF 061820Z 25008KT 1500 R25L/P2000N R25C/0800V1200U R07R/0350D R18/0900 BKN010 04/02 Q1023");
+	CHECK_INT((int)a.rvrGroups.size(), 4);
+	CHECK_TEXT(a.rvrGroups[0].text, "R25L/P2000N");
+	CHECK_INT(a.rvrGroups[0].runway, 25);
+	CHECK(a.rvrGroups[0].side == 'L');
+	CHECK_TEXT(a.rvrGroups[1].text, "R25C/0800V1200U");
+	CHECK(a.rvrGroups[1].side == 'C');
+	CHECK_INT(a.rvrGroups[3].runway, 18);
+	CHECK(a.rvrGroups[3].side == 0);
+
+	// no RVR in the METAR -> no rows; unavailable or after BECMG/RMK -> not a group
+	CHECK(BuildRvrLines(AssessMetar("EDDF 061820Z 25008KT 9999 NCD 04/02 Q1023"), l25L).empty());
+	CHECK(AssessMetar("EDDF 061820Z 25008KT 0300 R25L///// NCD 04/02 Q1023").rvrGroups.empty());
+	CHECK(AssessMetar("EDDF 061820Z 25008KT 9999 NCD 04/02 Q1023 BECMG R25L/0400N").rvrGroups.empty());
+
+	// only the groups of the landing runways (an RVR group belongs to the runway end)
+	CHECK_TEXT(Join(BuildRvrLines(a, l25L)), "R25L/P2000N");
+	CHECK_TEXT(Join(BuildRvrLines(a, l25LR)), "R25L/P2000N");		// there is no group for 25R
+	std::vector<std::string> l25LC07R; l25LC07R.push_back("25L"); l25LC07R.push_back("25C"); l25LC07R.push_back("07R");
+	CHECK_TEXT(Join(BuildRvrLines(a, l25LC07R)), "R25L/P2000N  R25C/0800V1200U|R07R/0350D");	// two per line
+
+	// designator without side letter matches any side and vice versa
+	std::vector<std::string> l25; l25.push_back("25");
+	CHECK_TEXT(Join(BuildRvrLines(a, l25)), "R25L/P2000N  R25C/0800V1200U");
+	std::vector<std::string> l18L(1, "18L");
+	CHECK_TEXT(Join(BuildRvrLines(a, l18L)), "R18/0900");
+
+	// no landing runway selected, or none of them has an RVR group -> all groups
+	CHECK_TEXT(Join(BuildRvrLines(a, none)), "R25L/P2000N  R25C/0800V1200U|R07R/0350D  R18/0900");
+	std::vector<std::string> l36(1, "36");
+	CHECK_TEXT(Join(BuildRvrLines(a, l36)), "R25L/P2000N  R25C/0800V1200U|R07R/0350D  R18/0900");
+
+	// invalid designators are ignored
+	std::vector<std::string> junk; junk.push_back(""); junk.push_back("XY"); junk.push_back("99");
+	CHECK_TEXT(Join(BuildRvrLines(a, junk)), "R25L/P2000N  R25C/0800V1200U|R07R/0350D  R18/0900");
+
+	// lower case designators from the sector file
+	std::vector<std::string> lower(1, "07r");
+	CHECK_TEXT(Join(BuildRvrLines(a, lower)), "R07R/0350D");
+
+	// the LVO decision still uses the lowest RVR of all groups
+	CHECK(a.rules == FlightRules::Lvo);
+	CHECK_INT(a.minRvrM, 350);
 }
 
 // ---------------------------------------------------------------------
@@ -743,6 +807,7 @@ int main()
 	TestWindLines();
 	TestRrs();
 	TestDetail();
+	TestRvrRows();
 	TestAtisFeed();
 	TestMeepSound();
 

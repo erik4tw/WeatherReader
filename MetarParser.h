@@ -20,6 +20,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 enum class FlightRules
 {
@@ -28,6 +29,14 @@ enum class FlightRules
 	VMC,
 	ImcYellow,	// IMC, Reduced Runway Separation still allowed
 	ImcOrange	// IMC, no Reduced Runway Separation
+};
+
+// One RVR group of the METAR, e.g. "R25L/P2000N"
+struct RvrGroup
+{
+	std::string text;		// the group as written in the METAR (upper case)
+	int  runway = 0;		// runway number (e.g. 25)
+	char side = 0;			// 'L', 'C', 'R' or 0 (none)
 };
 
 // Result of evaluating a METAR: the state and the values it was derived from.
@@ -45,6 +54,7 @@ struct MetarAssessment
 
 	bool haveRvr = false;			// at least one RVR group found
 	int  minRvrM = 0;				// lowest RVR in metres
+	std::vector<RvrGroup> rvrGroups;	// all valid RVR groups in the order of the METAR
 
 	char wintryCode[3] = { 0, 0, 0 };	// first SN/SG/PL/GR/GS found in the current weather, otherwise empty
 

@@ -88,13 +88,13 @@ void __declspec(dllexport) EuroScopePlugInExit(void)
 CWeatherReaderPlugIn::CWeatherReaderPlugIn()
 	: CPlugIn(EuroScopePlugIn::COMPATIBILITY_CODE,
 		"WeatherReader",
-		"1.0.0",
+		"1.1.0",
 		"Erik J. - 1583954",
 		"See LICENSE in the repository")
 	, m_LastRules(FlightRules::Unknown)
 {
 	// Appears in the EuroScope message window when the plugin is loaded.
-	DisplayUserMessage("Message", "WeatherReader", "WeatherReader 1.0.0 loaded.",
+	DisplayUserMessage("Message", "WeatherReader", "WeatherReader 1.1.0 loaded.",
 		true, true, true, false, false);
 
 	m_Atis.Start();
@@ -203,6 +203,46 @@ std::vector<int> CWeatherReaderPlugIn::FindActiveRunways(const std::string& stat
 	return runways;
 }
 
+std::vector<std::string> CWeatherReaderPlugIn::FindLandingRunways(const std::string& station)
+{
+	std::vector<std::string> runways;
+
+	SelectActiveSectorfile();
+
+	for (EuroScopePlugIn::CSectorElement el = SectorFileElementSelectFirst(EuroScopePlugIn::SECTOR_ELEMENT_RUNWAY);
+		el.IsValid();
+		el = SectorFileElementSelectNext(el, EuroScopePlugIn::SECTOR_ELEMENT_RUNWAY))
+	{
+		// Only runways of the selected airport (see FindActiveRunways)
+		const char* airport = el.GetAirportName();
+		if (airport == nullptr)
+			continue;
+		size_t icaoLength = station.size();
+		if (_strnicmp(airport, station.c_str(), icaoLength) != 0 || isalnum((unsigned char)airport[icaoLength]))
+			continue;
+
+		// IsElementActive(false, index): the runway end is ticked as arrival runway
+		for (int index = 0; index < 2; index++)
+		{
+			if (!el.IsElementActive(false, index))
+				continue;
+
+			const char* name = el.GetRunwayName(index);
+			if (name == nullptr)
+				continue;
+
+			bool known = false;
+			for (size_t i = 0; i < runways.size(); i++)
+				if (_stricmp(runways[i].c_str(), name) == 0)
+					known = true;
+			if (!known)
+				runways.push_back(name);
+		}
+	}
+
+	return runways;
+}
+
 void CWeatherReaderPlugIn::UpdateBox()
 {
 	// Station = active airport from the airport selector (the same as for the METAR in the
@@ -296,6 +336,12 @@ void CWeatherReaderPlugIn::UpdateBox()
 
 	// Wind group and QNH as written in the METAR (bold row above the state)
 	m_Box.SetInfo(assessment.windGroup.c_str(), assessment.qnh.c_str());
+
+	// RVR rows: the RVR groups of the METAR for the landing runways (in the order of the METAR)
+	std::vector<std::string> landingRunways;
+	if (!station.empty())
+		landingRunways = FindLandingRunways(station);
+	m_Box.SetRvr(BuildRvrLines(assessment, landingRunways));
 
 	// ATIS letter(s) of the airport from the VATSIM data feed (left in the header)
 	std::string atisLabel;

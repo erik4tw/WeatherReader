@@ -17,9 +17,21 @@
 // with the following character.
 const char SEPARATOR[] = " \xC2\xB7" " ";
 
-// Small line with the decisive values, e.g. "CEIL 1200 <dot> VIS 9999", "NO CEIL <dot> VIS 9999" or "RVR 550" (<dot> = SEPARATOR).
+// Small line with the decisive values, e.g. "CEIL 1200 <dot> VIS 9999", "NO CEIL <dot> VIS 9999" or, if the ceiling
+// causes LVO, "CEIL 100" (<dot> = SEPARATOR). The RVR is not part of it (it has its own rows, see BuildRvrLines).
 // Empty if the state is unknown.
 std::string BuildDetail(const MetarAssessment& a);
+
+// Maximum number of RVR groups per line of the RVR rows
+const int RVR_GROUPS_PER_LINE = 2;
+
+// RVR rows: the RVR groups as written in the METAR (e.g. "R25L/P2000N"), at most RVR_GROUPS_PER_LINE per line,
+// separated by two spaces. Only the groups of the landing runways are shown (the controller has to read
+// them out to every landing aircraft); landingRunways are the designators of the runway ends that are active
+// for arrival, e.g. "25L", "07C", "18". A group belongs to a landing runway if the number matches and the
+// side letters (L/C/R) agree (a missing letter on either side matches any). If no landing runway is known or
+// none of them has an RVR group, all RVR groups of the METAR are shown. Empty if the METAR has no RVR.
+std::vector<std::string> BuildRvrLines(const MetarAssessment& a, const std::vector<std::string>& landingRunways);
 
 // Wind lines, one per active runway number (runways, ascending), e.g. "RWY 25 HW: 5 kts <dot> CW: 3 kts".
 // HW = headwind, TW = tailwind, CW = crosswind. The runway heading is the runway number * 10

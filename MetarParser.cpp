@@ -269,6 +269,7 @@ MetarAssessment AssessMetar(const char* sMetar)
 	bool verticalVisibilityLost = false;	// VV/// : vertical visibility not measurable (counts as LVO)
 	bool haveRvr = false;
 	int  minRvrM = 0;				// lowest RVR of all groups
+	std::vector<RvrGroup> rvrGroups;	// all groups
 
 	int rvrValue = 0;
 
@@ -347,6 +348,14 @@ MetarAssessment AssessMetar(const char* sMetar)
 				haveRvr = true;
 				minRvrM = rvrValue;
 			}
+
+			// Keep the group itself (for the RVR row of the box): "R25L/..." -> runway 25, side L
+			RvrGroup group;
+			group.text = t;
+			group.runway = atoi(t.substr(1, 2).c_str());
+			if (t[3] == 'L' || t[3] == 'C' || t[3] == 'R')
+				group.side = t[3];
+			rvrGroups.push_back(group);
 		}
 		else
 		{
@@ -363,6 +372,7 @@ MetarAssessment AssessMetar(const char* sMetar)
 	result.verticalVisibilityLost = verticalVisibilityLost;
 	result.haveRvr = haveRvr;
 	result.minRvrM = minRvrM;
+	result.rvrGroups = rvrGroups;
 	if (!wintryCode.empty())
 	{
 		result.wintryCode[0] = wintryCode[0];

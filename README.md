@@ -13,6 +13,7 @@ draggable box on the radar screen, so you do not have to read and interpret the 
 ```
 K WX EDDF · 1420z      <- ATIS letter (bold, blue), station (coloured like the state) and METAR time (UTC); the arrow collapses the box
 25008KT          Q1019 <- wind group and QNH as in the METAR, bold
+   R25L/P2000N         <- RVR of the landing runways, as in the METAR (only if the METAR has an RVR, expanded only)
         IMC            <- state, coloured
    RRS POSSIBLE        <- note on Reduced Runway Separation (RRS)
 RWY 25 HW: 5 kts · CW: 3 kts
@@ -45,6 +46,11 @@ RWY 18 TW: 13 (23) · CW: 5 (8) kts   <- per active runway; gusts in brackets
   **Network access:** a background thread downloads the feed (HTTPS GET, no login, about every 30 seconds, via the
   Windows proxy settings) and only while EuroScope is connected to the live VATSIM network. On a Sweatbox, as a simulator
   or in playback nothing is downloaded and no letter is shown. No data is sent anywhere.
+* **RVR:** if the METAR contains RVR groups, they are shown as written in the METAR (e.g. `R25L/P2000N`) in bold below the
+  wind/QNH row, as the controller has to read them out to every landing aircraft. Only the groups of the runway ends that
+  are ticked as **arrival** runways in the airport/runway selector are shown, at most two per row. If no arrival runway is
+  selected, or none of them has an RVR group, all RVR groups of the METAR are shown. The rows are only visible when the
+  box is expanded. For the LVO decision the lowest RVR of *all* groups still counts (<= 600 m).
 * **Runways** are taken from the airport/runway selector (departure or arrival, all parallel runways
   of a number are merged to one line). The runway heading is derived from the runway number (x 10).
 * Only the current weather before `BECMG`, `TEMPO`, `NOSIG` and `RMK` is evaluated.

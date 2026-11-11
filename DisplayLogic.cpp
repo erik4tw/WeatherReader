@@ -3,6 +3,7 @@
 #include "pch.h"
 #include "DisplayLogic.h"
 
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 
@@ -11,31 +12,27 @@ std::string BuildDetail(const MetarAssessment& a)
 	std::string detail;
 	char buffer[32];
 
+	// LVO caused by the ceiling: only the ceiling is shown. (An RVR is shown in its own rows;
+	// if LVO is caused by the RVR alone, the normal values below are shown.)
+	bool ceilingCausesLvo = a.rules == FlightRules::Lvo &&
+		(a.verticalVisibilityLost || (a.haveCeiling && a.ceilingFt < LVO_BELOW_CEILING_FT));
+	if (ceilingCausesLvo)
+	{
+		if (a.verticalVisibilityLost)
+		{
+			detail = "CEIL ///";
+		}
+		else
+		{
+			sprintf_s(buffer, "CEIL %d", a.ceilingFt);
+			detail = buffer;
+		}
+		return detail;
+	}
+
 	switch (a.rules)
 	{
 	case FlightRules::Lvo:
-		// The values that trigger LVO
-		if (a.haveRvr && a.minRvrM <= LVO_MAX_RVR_M)
-		{
-			sprintf_s(buffer, "RVR %d", a.minRvrM);
-			detail = buffer;
-		}
-		if (a.verticalVisibilityLost || (a.haveCeiling && a.ceilingFt < LVO_BELOW_CEILING_FT))
-		{
-			if (!detail.empty())
-				detail += SEPARATOR;
-			if (a.verticalVisibilityLost)
-			{
-				detail += "CEIL ///";
-			}
-			else
-			{
-				sprintf_s(buffer, "CEIL %d", a.ceilingFt);
-				detail += buffer;
-			}
-		}
-		break;
-
 	case FlightRules::VMC:
 	case FlightRules::ImcYellow:
 	case FlightRules::ImcOrange:
@@ -227,4 +224,73 @@ RrsNote BuildRrsNote(const RrsResult& rrs)
 		}
 	}
 	return note;
+}
+
+namespace
+{
+	// Splits a runway designator such as "25L", "07C" or "18" into number and side letter (0 = none).
+	bool ParseRunwayDesignator(const std::string& name, int& number, char& side)
+	{
+		size_t i = 0;
+		int value = 0;
+		while (i < name.size() && isdigit((unsigned char)name[i]) && i < 2)
+			value = value * 10 + (name[i++] - '0');
+		if (i == 0 || value < 1 || value > 36)
+			return false;
+
+		number = value;
+		side = 0;
+		if (i < name.size())
+		{
+			char letter = (char)toupper((unsigned char)name[i]);
+			if (letter == 'L' || letter == 'C' || letter == 'R')
+				side = letter;
+		}
+		return true;
+	}
+}
+
+std::vector<std::string> BuildRvrLines(const MetarAssessment& a, const std::vector<std::string>& landingRunways)
+{
+	std::vector<std::string> lines;
+	if (a.rvrGroups.empty())
+		return lines;
+
+	// Runway ends that are active for arrival
+	std::vector<RvrGroup> landing;
+	for (size_t i = 0; i < landingRunways.size(); i++)
+	{
+		RvrGroup runway;
+		if (ParseRunwayDesignator(landingRunways[i], runway.runway, runway.side))
+			landing.push_back(runway);
+	}
+
+	// RVR groups of these runways; if there are none, all groups
+	std::vector<std::string> selected;
+	for (size_t g = 0; g < a.rvrGroups.size(); g++)
+	{
+		for (size_t r = 0; r < landing.size(); r++)
+		{
+			if (a.rvrGroups[g].runway == landing[r].runway &&
+				(a.rvrGroups[g].side == 0 || landing[r].side == 0 || a.rvrGroups[g].side == landing[r].side))
+			{
+				selected.push_back(a.rvrGroups[g].text);
+				break;
+			}
+		}
+	}
+	if (selected.empty())
+	{
+		for (size_t g = 0; g < a.rvrGroups.size(); g++)
+			selected.push_back(a.rvrGroups[g].text);
+	}
+
+	for (size_t i = 0; i < selected.size(); i += RVR_GROUPS_PER_LINE)
+	{
+		std::string line = selected[i];
+		for (size_t j = i + 1; j < selected.size() && j < i + RVR_GROUPS_PER_LINE; j++)
+			line += "  " + selected[j];
+		lines.push_back(line);
+	}
+	return lines;
 }

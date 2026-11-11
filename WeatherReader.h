@@ -76,6 +76,10 @@ private:
 	// as departure or arrival runway for the airport station, ascending and without duplicates.
 	std::vector<int> FindActiveRunways(const std::string& station);
 
+	// Returns the designators of the runway ends (e.g. "25L", "07C", "18") that are active for arrival
+	// (landing) at the airport station in the airport selector.
+	std::vector<std::string> FindLandingRunways(const std::string& station);
+
 	// Plays the short "meep" (change of the weather state).
 	void PlayChangeSound();
 

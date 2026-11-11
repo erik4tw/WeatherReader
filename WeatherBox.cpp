@@ -33,6 +33,10 @@ namespace
 	const int INFO_HEIGHT      = 24;
 	const int INFO_FONT        = 15;
 	const int ATIS_FONT        = 19;	// ATIS letter(s) in the header
+
+	// RVR rows below the wind/QNH row (bold, only when expanded)
+	const int RVR_LINE_HEIGHT  = 20;
+	const int RVR_FONT         = 14;
 	const int INFO_GAP         = 14;	// minimum gap between wind group and QNH
 	const int INFO_FLASH_PAD   = 4;		// padding of the inverted QNH area around the text
 
@@ -126,6 +130,7 @@ void CWeatherBox::SetContent(const char* sStation, const char* sText, COLORREF c
 	m_sWind.clear();
 	m_sQnh.clear();
 	m_sAtis.clear();
+	m_RvrLines.clear();
 }
 
 void CWeatherBox::SetWindLines(const std::vector<std::string>& lines, const std::vector<bool>& warn)
@@ -158,6 +163,7 @@ void CWeatherBox::CopyContentFrom(const CWeatherBox& other)
 	m_sWind = other.m_sWind;
 	m_sQnh = other.m_sQnh;
 	m_sAtis = other.m_sAtis;
+	m_RvrLines = other.m_RvrLines;
 }
 
 void CWeatherBox::SetPosition(int left, int top)
@@ -184,6 +190,11 @@ void CWeatherBox::SetInfo(const char* sWind, const char* sQnh)
 {
 	m_sWind = sWind;
 	m_sQnh = sQnh;
+}
+
+void CWeatherBox::SetRvr(const std::vector<std::string>& lines)
+{
+	m_RvrLines = lines;
 }
 
 void CWeatherBox::SetAtis(const char* sAtis)
@@ -252,6 +263,10 @@ bool CWeatherBox::Draw(HDC hDC, const RECT& area)
 	bool hasInfo = !m_sWind.empty() || !m_sQnh.empty();
 	int infoHeight = hasInfo ? ScaleDpi(INFO_HEIGHT, dpi) : 0;
 
+	// The RVR rows only exist when expanded; the width is reserved in any case (see below)
+	int rvrLineHeight = ScaleDpi(RVR_LINE_HEIGHT, dpi);
+	int rvrHeight = m_bCollapsed ? 0 : (int)m_RvrLines.size() * rvrLineHeight;
+
 	int windLineHeight = ScaleDpi(WIND_LINE_HEIGHT, dpi);
 	int windHeight = (int)m_WindLines.size() * windLineHeight;
 
@@ -266,6 +281,7 @@ bool CWeatherBox::Draw(HDC hDC, const RECT& area)
 	HFONT hWindFont = CreateBoxFont(ScaleDpi(WIND_FONT, dpi), FW_NORMAL);
 	HFONT hInfoFont = CreateBoxFont(ScaleDpi(INFO_FONT, dpi), FW_BOLD);
 	HFONT hAtisFont = CreateBoxFont(ScaleDpi(ATIS_FONT, dpi), FW_BOLD);
+	HFONT hRvrFont = CreateBoxFont(ScaleDpi(RVR_FONT, dpi), FW_BOLD);
 
 	std::string header = "WX " + m_sStation;
 
@@ -286,6 +302,12 @@ bool CWeatherBox::Draw(HDC hDC, const RECT& area)
 	if (!m_sWind.empty() && !m_sQnh.empty())
 		infoWidth += ScaleDpi(INFO_GAP, dpi);
 	if (infoWidth > width)    width = infoWidth;
+	for (size_t i = 0; i < m_RvrLines.size(); i++)
+	{
+		int lineWidth = MeasureText(hDC, m_RvrLines[i], hRvrFont) + 2 * sidePadding;
+		if (lineWidth > width)
+			width = lineWidth;
+	}
 	for (size_t i = 0; i < m_WindLines.size(); i++)
 	{
 		int lineWidth = MeasureText(hDC, m_WindLines[i], hWindFont) + 2 * sidePadding;
@@ -293,7 +315,7 @@ bool CWeatherBox::Draw(HDC hDC, const RECT& area)
 			width = lineWidth;
 	}
 
-	int height = ScaleDpi(BOX_HEIGHT, dpi) + infoHeight + noteHeight + windHeight + detailHeight;
+	int height = ScaleDpi(BOX_HEIGHT, dpi) + infoHeight + rvrHeight + noteHeight + windHeight + detailHeight;
 
 	// When collapsed only the header and the wind/QNH row are visible
 	if (m_bCollapsed)
@@ -412,13 +434,22 @@ bool CWeatherBox::Draw(HDC hDC, const RECT& area)
 	// Below: text (only when expanded)
 	if (!m_bCollapsed)
 	{
-		RECT rcText = { m_rc.left, m_rc.top + stationHeight + infoHeight, m_rc.right, m_rc.bottom - noteHeight - windHeight - detailHeight - 2 };
+		// RVR rows directly below the wind/QNH row (bold, centred)
+		for (size_t i = 0; i < m_RvrLines.size(); i++)
+		{
+			int top = m_rc.top + stationHeight + infoHeight + (int)i * rvrLineHeight;
+			RECT rcRvr = { m_rc.left, top, m_rc.right, top + rvrLineHeight };
+			DrawBoxText(hDC, m_RvrLines[i], rcRvr, hRvrFont, RGB(235, 235, 235), DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		}
+
+		int textTop = m_rc.top + stationHeight + infoHeight + rvrHeight;
+		RECT rcText = { m_rc.left, textTop, m_rc.right, m_rc.bottom - noteHeight - windHeight - detailHeight - 2 };
 		COLORREF textColour = m_Colour;
 
 		if (flashText)
 		{
 			// Flashing: coloured area (inside the frame) with dark text
-			RECT rcFill = { m_rc.left + 1, m_rc.top + stationHeight + infoHeight, m_rc.right - 1,
+			RECT rcFill = { m_rc.left + 1, textTop, m_rc.right - 1,
 				(noteHeight + windHeight + detailHeight > 0) ? m_rc.bottom - noteHeight - windHeight - detailHeight : m_rc.bottom - 1 };
 			HBRUSH hFillBrush = CreateSolidBrush(m_Colour);
 			FillRect(hDC, &rcFill, hFillBrush);
@@ -496,5 +527,6 @@ bool CWeatherBox::Draw(HDC hDC, const RECT& area)
 	DeleteObject(hWindFont);
 	DeleteObject(hInfoFont);
 	DeleteObject(hAtisFont);
+	DeleteObject(hRvrFont);
 	return true;
 }
