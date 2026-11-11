@@ -1,0 +1,3 @@
+* text=auto
+*.rc -text
+*.lib binary
