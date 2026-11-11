@@ -10,6 +10,24 @@ draggable box on the radar screen, so you do not have to read and interpret the 
 
 ## What it shows
 
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/vmc.png" width="200" alt="VMC"><br><b>VMC</b></td>
+    <td align="center"><img src="docs/images/imc-yellow.png" width="200" alt="IMC, RRS possible"><br><b>IMC</b>, RRS possible</td>
+    <td align="center"><img src="docs/images/imc-orange.png" width="200" alt="IMC, RRS not possible"><br><b>IMC</b>, RRS not possible</td>
+    <td align="center"><img src="docs/images/lvo.png" width="200" alt="LVO"><br><b>LVO</b></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/images/collapsed.png" alt="Collapsed box"><br>
+  <i>Collapsed: station, ATIS letter, wind and QNH stay visible.</i>
+</p>
+
+An asterisk after the station (`EDDF*`) marks a test METAR set with `.wbox metar`.
+
+The box in detail (expanded):
+
 ```
 K WX EDDF · 1420z      <- ATIS letter (bold, blue), station (coloured like the state) and METAR time (UTC); the arrow collapses the box
 25008KT          Q1019 <- wind group and QNH as in the METAR, bold
