@@ -60,6 +60,10 @@ The exact rules are documented in [`MetarParser.h`](MetarParser.h) and [`Display
 3. The box appears in the standard radar screen and in the ground radar. Drag it to where you want it; the
    position and the collapsed state are saved per screen type in your EuroScope settings.
 
+> **If EuroScope cannot load the DLL:** Windows may have marked the downloaded file as blocked. Right-click
+> `WeatherReader.dll` in the Explorer, choose **Properties**, tick **Unblock** at the bottom of the *General* tab
+> (if it is shown), click **OK** and load the plugin again.
+
 ## Commands
 
 | Command                    | Effect                                                             |
