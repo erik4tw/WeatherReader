@@ -91,13 +91,13 @@ void __declspec(dllexport) EuroScopePlugInExit(void)
 CWeatherReaderPlugIn::CWeatherReaderPlugIn()
 	: CPlugIn(EuroScopePlugIn::COMPATIBILITY_CODE,
 		"WeatherReader",
-		"1.1.0",
+		"1.2.0",
 		"Erik J. - 1583954",
 		"See LICENSE in the repository")
 	, m_LastRules(FlightRules::Unknown)
 {
 	// Appears in the EuroScope message window when the plugin is loaded.
-	DisplayUserMessage("Message", "WeatherReader", "WeatherReader 1.1.0 loaded.",
+	DisplayUserMessage("Message", "WeatherReader", "WeatherReader 1.2.0 loaded.",
 		true, true, true, false, false);
 
 	m_Atis.Start();

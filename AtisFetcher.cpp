@@ -13,7 +13,7 @@ namespace
 {
 	const wchar_t* const FEED_HOST = L"data.vatsim.net";
 	const wchar_t* const FEED_PATH = L"/v3/vatsim-data.json";
-	const wchar_t* const USER_AGENT = L"WeatherReader/1.1.0 (EuroScope plugin)";
+	const wchar_t* const USER_AGENT = L"WeatherReader/1.2.0 (EuroScope plugin)";
 
 	// The feed is regenerated about every 15 seconds; we ask less often.
 	const ULONGLONG POLL_INTERVAL_MS = 30 * 1000;
