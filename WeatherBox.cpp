@@ -107,11 +107,12 @@ CWeatherBox::CWeatherBox()
 	, m_bUserPlaced(false)
 	, m_rc()
 	, m_rcToggle()
+	, m_rcQnh()
 	, m_Colour(RGB(255, 255, 255))
 	, m_FlashStart(0)
 	, m_FlashEnd(0)
 	, m_QnhFlashStart(0)
-	, m_QnhFlashEnd(0)
+	, m_bQnhAlert(false)
 {
 }
 
@@ -159,7 +160,7 @@ void CWeatherBox::CopyContentFrom(const CWeatherBox& other)
 	m_FlashStart = other.m_FlashStart;
 	m_FlashEnd = other.m_FlashEnd;
 	m_QnhFlashStart = other.m_QnhFlashStart;
-	m_QnhFlashEnd = other.m_QnhFlashEnd;
+	m_bQnhAlert = other.m_bQnhAlert;
 	m_sWind = other.m_sWind;
 	m_sQnh = other.m_sQnh;
 	m_sAtis = other.m_sAtis;
@@ -180,10 +181,13 @@ void CWeatherBox::StartFlash(unsigned int durationMs)
 	m_FlashEnd = m_FlashStart + durationMs;
 }
 
-void CWeatherBox::StartQnhFlash(unsigned int durationMs)
+void CWeatherBox::StartQnhAlert()
 {
+	if (m_bQnhAlert)
+		return;		// already flashing: keep the rhythm
+
 	m_QnhFlashStart = GetTickCount64();
-	m_QnhFlashEnd = m_QnhFlashStart + durationMs;
+	m_bQnhAlert = true;
 }
 
 void CWeatherBox::SetInfo(const char* sWind, const char* sQnh)
@@ -249,7 +253,8 @@ bool CWeatherBox::Draw(HDC hDC, const RECT& area)
 	// Flash phase: while flashing, the coloured area alternates between "on" and "off"
 	ULONGLONG now = GetTickCount64();
 	bool flashOn = (now < m_FlashEnd) && (((now - m_FlashStart) / FLASH_HALF_PERIOD_MS) % 2 == 0);
-	bool qnhFlashOn = (now < m_QnhFlashEnd) && (((now - m_QnhFlashStart) / FLASH_HALF_PERIOD_MS) % 2 == 0);
+	bool qnhFlashOn = m_bQnhAlert && (now >= m_QnhFlashStart) && (((now - m_QnhFlashStart) / FLASH_HALF_PERIOD_MS) % 2 == 0);
+	SetRectEmpty(&m_rcQnh);		// set again below if there is a QNH
 	bool flashHeader = flashOn && m_bCollapsed;				// when collapsed the header flashes
 	bool flashText = flashOn && !m_bCollapsed;				// when expanded the large text flashes
 
@@ -409,18 +414,27 @@ bool CWeatherBox::Draw(HDC hDC, const RECT& area)
 
 	if (hasInfo)
 	{
-		// Wind group (left) and QNH (right) in bold below the header, also when collapsed. A changed QNH flashes inverted.
+		// Wind group (left) and QNH (right) in bold below the header, also when collapsed. A changed QNH flashes inverted until it is clicked.
 		int infoTop = m_rc.top + stationHeight;
 		RECT rcInfo = { m_rc.left + sidePadding, infoTop, m_rc.right - sidePadding, infoTop + infoHeight };
 		const COLORREF infoColour = RGB(235, 235, 235);
 
 		DrawBoxText(hDC, m_sWind, rcInfo, hInfoFont, infoColour, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
+		int pad = ScaleDpi(INFO_FLASH_PAD, dpi);
+		int qnhWidth = MeasureText(hDC, m_sQnh, hInfoFont);
+		if (!m_sQnh.empty())
+		{
+			// Click area to acknowledge a changed QNH: the QNH with some room around it, up to the edge of the box
+			m_rcQnh.left = rcInfo.right - qnhWidth - 2 * pad;
+			m_rcQnh.right = m_rc.right;
+			m_rcQnh.top = infoTop;
+			m_rcQnh.bottom = infoTop + infoHeight;
+		}
+
 		COLORREF qnhColour = infoColour;
 		if (qnhFlashOn && !m_sQnh.empty())
 		{
-			int pad = ScaleDpi(INFO_FLASH_PAD, dpi);
-			int qnhWidth = MeasureText(hDC, m_sQnh, hInfoFont);
 			RECT rcQnhFill = { rcInfo.right - qnhWidth - pad, infoTop + ScaleDpi(2, dpi),
 				rcInfo.right + pad, infoTop + infoHeight - ScaleDpi(2, dpi) };
 			HBRUSH hQnhBrush = CreateSolidBrush(infoColour);

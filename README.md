@@ -54,8 +54,8 @@ RWY 18 TW: 13 (23) · CW: 5 (8) kts   <- per active runway; gusts in brackets
 * **Change of state:** if the state changes at the same airport, the box flashes for 10 seconds and a short
   "meep" is played. (Not on the first display, on an airport change or for "unknown".)
 * **Wind and QNH:** the main wind group (without the varying-direction group) and the QNH are shown in bold above the
-  state, so the box can be used to read out the wind. If the QNH changes at the same airport, the QNH flashes inverted for
-  10 seconds and the same "meep" is played. The row stays visible when the box is collapsed (then the box consists of the header and this row). "WX <ICAO>" in the header is coloured like the state, so the weather state is also visible when collapsed.
+  state, so the box can be used to read out the wind. If the QNH changes at the same airport, the same "meep" is played and the QNH
+  flashes inverted **until you click on it** with the mouse (as a confirmation that you have seen it). The row stays visible when the box is collapsed (then the box consists of the header and this row). "WX <ICAO>" in the header is coloured like the state, so the weather state is also visible when collapsed.
 * **ATIS letter:** EuroScope does not offer the ATIS letter to plugins, so the plugin reads it from the public
   [VATSIM data feed](https://data.vatsim.net/v3/vatsim-data.json) and shows it at the left of the header, also when the
   box is collapsed. It looks for the stations `<ICAO>_ATIS`, `<ICAO>_A_ATIS` and `<ICAO>_D_ATIS`: a combined ATIS (or equal

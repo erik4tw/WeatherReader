@@ -792,6 +792,20 @@ static void TestMeepSound()
 
 	// 0.25 seconds at 22050 Hz with 16 bit
 	CHECK_INT((int)(ReadU32(wav, 40) / 2), 22050 / 4);
+
+	// the sound must be audible but not loud: the loudest sample is at about the volume setting (0.22 of full scale)
+	int peak = 0;
+	for (size_t i = 44; i + 1 < wav.size(); i += 2)
+	{
+		int sample = (short)(wav[i] | (wav[i + 1] << 8));
+		if (abs(sample) > peak)
+			peak = abs(sample);
+	}
+	CHECK(peak > 6500 && peak < 7500);
+
+	// starts and ends with silence (fade-in and fade-out, no click)
+	CHECK(abs((short)(wav[44] | (wav[45] << 8))) < 100);
+	CHECK(abs((short)(wav[wav.size() - 2] | (wav[wav.size() - 1] << 8))) < 700);
 }
 
 // ---------------------------------------------------------------------

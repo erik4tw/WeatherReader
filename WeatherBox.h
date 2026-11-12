@@ -44,8 +44,16 @@ public:
 	// Empty = none. Must be called after SetContent() because SetContent() clears it.
 	void SetAtis(const char* sAtis);
 
-	// Makes the QNH flash inverted for durationMs milliseconds (e.g. after a change).
-	void StartQnhFlash(unsigned int durationMs);
+	// Makes the QNH flash inverted (after a change) until it is acknowledged with AcknowledgeQnh().
+	// If it is already flashing, nothing changes.
+	void StartQnhAlert();
+
+	// Stops the QNH flashing (the user has clicked on the QNH, or the airport has changed).
+	void AcknowledgeQnh() { m_bQnhAlert = false; }
+	bool IsQnhAlert() const { return m_bQnhAlert; }
+
+	// Click area of the QNH (right part of the wind/QNH row), valid after the last Draw().
+	const RECT& GetQnhRect() const { return m_rcQnh; }
 
 	// Sets the wind lines (one per runway, e.g. "RWY 25 HW: 5 kts <dot> CW: 3 kts") in small type
 	// below the note. warn[i] = true colours line i orange (e.g. too much tailwind for RRS);
@@ -107,6 +115,7 @@ private:
 	bool        m_bUserPlaced;	// true as soon as the position has been moved or loaded
 	RECT        m_rc;
 	RECT        m_rcToggle;		// click area of the arrow
+	RECT        m_rcQnh;		// click area of the QNH
 
 	std::string m_sStation;
 	std::string m_sText;
@@ -115,8 +124,8 @@ private:
 	ULONGLONG   m_FlashStart;	// time (GetTickCount64) when flashing started
 	ULONGLONG   m_FlashEnd;		// end of flashing; 0 = not flashing
 
-	ULONGLONG   m_QnhFlashStart;	// the same for the QNH
-	ULONGLONG   m_QnhFlashEnd;
+	ULONGLONG   m_QnhFlashStart;	// the QNH flashes from this time (GetTickCount64) ...
+	bool        m_bQnhAlert;		// ... until the user acknowledges it with a click
 
 	std::string m_sAtis;		// ATIS letter(s) at the left of the header
 

@@ -92,7 +92,7 @@ private:
 	// Last displayed state: on a change at the same airport the box flashes
 	std::string m_LastStation;
 	FlightRules m_LastRules;
-	std::string m_LastQnh;	// last displayed QNH: on a change at the same airport the QNH flashes
+	std::string m_LastQnh;	// last displayed QNH: on a change at the same airport the QNH flashes until clicked
 
 	// Test METAR (set via ".wbox metar ..."); empty = use the live METAR
 	std::string m_TestMetar;

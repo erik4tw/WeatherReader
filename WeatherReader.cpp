@@ -64,6 +64,9 @@ namespace
 	// Type of the screen object for the collapse/expand arrow
 	const int SCREEN_OBJECT_TOGGLE = 2;
 
+	// Type of the screen object for the QNH (clicking acknowledges a changed QNH)
+	const int SCREEN_OBJECT_QNH = 3;
+
 	// How long the box flashes after a change of the weather state
 	const unsigned int FLASH_DURATION_MS = 10000;
 }
@@ -294,7 +297,7 @@ void CWeatherReaderPlugIn::UpdateBox()
 	rules = rrs.shown;
 
 	// If the displayed state changes at the same airport (e.g. VMC -> IMC), the box flashes for 10 seconds.
-	// If the QNH changes at the same airport, the QNH flashes inverted for 10 seconds. Both play the same sound
+	// If the QNH changes at the same airport, the QNH flashes inverted until the user clicks on it. Both play the same sound
 	// (once, if both change at the same time). There is no flashing or sound on the first display, on an
 	// airport change or for "unknown" (-) / a missing QNH.
 	bool stateChanged = station == m_LastStation &&
@@ -308,7 +311,9 @@ void CWeatherReaderPlugIn::UpdateBox()
 	if (stateChanged)
 		m_Box.StartFlash(FLASH_DURATION_MS);
 	if (qnhChanged)
-		m_Box.StartQnhFlash(FLASH_DURATION_MS);
+		m_Box.StartQnhAlert();
+	if (station != m_LastStation || assessment.qnh.empty())
+		m_Box.AcknowledgeQnh();		// nothing to acknowledge for another airport or without QNH
 	if (stateChanged || qnhChanged)
 		PlayChangeSound();
 	m_LastStation = station;
@@ -544,6 +549,10 @@ void CWeatherRadarScreen::OnRefresh(HDC hDC, int Phase)
 
 		// The arrow is registered after the box so that it takes precedence on a click
 		AddScreenObject(SCREEN_OBJECT_TOGGLE, "WeatherBoxToggle", box.GetToggleRect(), false, "");
+
+		// While the QNH flashes, it can be clicked to acknowledge it
+		if (box.IsQnhAlert())
+			AddScreenObject(SCREEN_OBJECT_QNH, "WeatherBoxQnh", box.GetQnhRect(), false, "");
 	}
 }
 
@@ -568,6 +577,19 @@ void CWeatherRadarScreen::OnClickScreenObject(int ObjectType, const char* sObjec
 		return;
 
 	CWeatherBox& box = m_Box;
+
+	// A click on the flashing QNH acknowledges the change. The central box (content for all screens) is the one
+	// that counts, this screen's copy is updated at the next refresh.
+	bool qnh = (ObjectType == SCREEN_OBJECT_QNH);
+	if (!qnh && ObjectType == SCREEN_OBJECT_BOX && box.IsQnhAlert())
+		qnh = (PtInRect(&box.GetQnhRect(), Pt) != FALSE);
+	if (qnh)
+	{
+		box.AcknowledgeQnh();
+		m_pOwner->GetBox().AcknowledgeQnh();
+		RequestRefresh();
+		return;
+	}
 
 	bool toggle = (ObjectType == SCREEN_OBJECT_TOGGLE);
 
