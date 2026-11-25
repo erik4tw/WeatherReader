@@ -790,8 +790,8 @@ static void TestMeepSound()
 	CHECK_INT((int)ReadU32(wav, 40), (int)wav.size() - 44);		// length of the sound data
 	CHECK_INT((int)ReadU32(wav, 24), 22050);					// sample rate
 
-	// 0.25 seconds at 22050 Hz with 16 bit
-	CHECK_INT((int)(ReadU32(wav, 40) / 2), 22050 / 4);
+	// 0.181 seconds at 22050 Hz with 16 bit (length of the original sound)
+	CHECK_INT((int)(ReadU32(wav, 40) / 2), 3991);
 
 	// the sound must be audible but not loud: the loudest sample is at about the volume setting (0.22 of full scale)
 	int peak = 0;

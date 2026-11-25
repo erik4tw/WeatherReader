@@ -1,4 +1,4 @@
-// MeepSound.cpp: The short sound on a change of the weather state (see MeepSound.h)
+// MeepSound.cpp: The short sound on a change of the weather state and of the QNH (see MeepSound.h)
 
 #include "pch.h"
 #include "MeepSound.h"
@@ -7,77 +7,71 @@
 
 namespace
 {
-	// Second-order low-pass filter (biquad, Butterworth characteristic): cuts the high overtones of the sawtooth
-	std::vector<double> LowPass(const std::vector<double>& input, double cutoffHz, double sampleRate)
+	// One partial of the sound: frequency in Hz, relative amplitude (loudest = 1.0) and phase in radians.
+	// The values were measured on the original recording of a real system (least-squares fit, 98 % of the variance).
+	struct Partial
 	{
-		const double q = 0.707;
-		const double pi = 3.14159265358979323846;
-		double w0 = 2.0 * pi * cutoffHz / sampleRate;
-		double alpha = sin(w0) / (2.0 * q);
-		double c = cos(w0);
-		double a0 = 1.0 + alpha;
-		double b0 = (1.0 - c) / 2.0 / a0;
-		double b1 = (1.0 - c) / a0;
-		double b2 = b0;
-		double a1 = -2.0 * c / a0;
-		double a2 = (1.0 - alpha) / a0;
+		double frequency;
+		double amplitude;
+		double phase;
+	};
 
-		std::vector<double> output(input.size());
-		double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-		for (size_t i = 0; i < input.size(); i++)
-		{
-			double y = b0 * input[i] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-			x2 = x1; x1 = input[i];
-			y2 = y1; y1 = y;
-			output[i] = y;
-		}
-		return output;
-	}
+	const Partial PARTIALS[] =
+	{
+		{  517.03, 0.1554, -2.4465 },
+		{  636.54, 0.3964,  2.8537 },
+		{  777.72, 1.0000,  2.8041 },
+		{ 1033.64, 0.2912,  2.7139 },
+		{ 1273.33, 0.3207,  0.5147 },
+		{ 1556.23, 0.2657, -2.9015 },
+		{ 1909.97, 0.1168, -0.0455 },
+		{ 2332.81, 0.0901, -0.4917 },
+		{ 3183.59, 0.0185, -1.1256 },
+	};
+
+	// The phases refer to a point in time 12 ms after the start of the original recording
+	const double PHASE_REFERENCE_SECONDS = 0.012;
 }
 
 // Layout of the WAV file: RIFF header, "fmt " chunk, "data" chunk (16 bit, mono, 22050 Hz).
 std::vector<unsigned char> BuildMeepWav()
 {
 	const int sampleRate = 22050;
-	const double frequencyLow = 415.3;		// the two tones in Hz (sounding at the same time)
-	const double frequencyHigh = 493.6;
-	const double cutoff = 1200.0;			// low-pass (applied twice): the higher, the brighter the sound
-	const int durationMs = 250;				// duration
+	const double durationSeconds = 0.181;	// duration of the original sound
 	const double volume = 0.22;				// volume (1.0 = full scale)
+	const double pi = 3.14159265358979323846;
 
-	int count = sampleRate * durationMs / 1000;
-	int attack = sampleRate * 5 / 1000;		// 5 ms fade-in (against clicks)
-	int release = sampleRate * 80 / 1000;	// 80 ms fade-out
+	int count = (int)(sampleRate * durationSeconds + 0.5);
+	int attack = sampleRate * 8 / 1000;		// 8 ms fade-in (against clicks)
+	int release = sampleRate * 20 / 1000;	// 20 ms fade-out
 
-	// Two sawtooth tones (phase 0..1 rises steadily and then jumps back: rough sound), added up
+	// Add up the partials
 	std::vector<double> raw(count);
-	for (int i = 0; i < count; i++)
-	{
-		double low = 2.0 * fmod(frequencyLow * i / sampleRate, 1.0) - 1.0;
-		double high = 2.0 * fmod(frequencyHigh * i / sampleRate, 1.0) - 1.0;
-		raw[i] = 0.5 * (low + high);
-	}
-
-	// Duller sound: filter twice, then bring the loudest point back to full scale before the volume is applied
-	std::vector<double> filtered = LowPass(LowPass(raw, cutoff, sampleRate), cutoff, sampleRate);
 	double peak = 0.0;
 	for (int i = 0; i < count; i++)
-		if (fabs(filtered[i]) > peak)
-			peak = fabs(filtered[i]);
-	if (peak <= 0.0)
-		peak = 1.0;
-
-	std::vector<short> samples;
-	for (int i = 0; i < count; i++)
 	{
+		double t = (double)i / sampleRate - PHASE_REFERENCE_SECONDS;
+		double sum = 0.0;
+		for (size_t p = 0; p < sizeof(PARTIALS) / sizeof(PARTIALS[0]); p++)
+			sum += PARTIALS[p].amplitude * cos(2.0 * pi * PARTIALS[p].frequency * t + PARTIALS[p].phase);
+
 		double envelope = 1.0;
 		if (i < attack)
 			envelope = (double)i / attack;
-		else if (i > count - release)
+		else if (i >= count - release)
 			envelope = (double)(count - i) / release;
 
-		samples.push_back((short)(volume * envelope * (filtered[i] / peak) * 32767.0));
+		raw[i] = sum * envelope;
+		if (fabs(raw[i]) > peak)
+			peak = fabs(raw[i]);
 	}
+	if (peak <= 0.0)
+		peak = 1.0;
+
+	// Bring the loudest point back to full scale before the volume is applied
+	std::vector<short> samples;
+	for (int i = 0; i < count; i++)
+		samples.push_back((short)(volume * (raw[i] / peak) * 32767.0));
 
 	unsigned int dataBytes = (unsigned int)(samples.size() * sizeof(short));
 	std::vector<unsigned char> wav;
