@@ -1,8 +1,8 @@
 # WeatherReader
 
 A small [EuroScope](https://www.euroscope.hu/) plugin for VATSIM controllers. It shows the weather
-state of the **active airport** (as selected in the *Active airport/runway selector*) in a small,
-draggable box on the radar screen, so you do not have to read and interpret the METAR yourself.
+state of the **active airport** (as selected in the *Active airport/runway selector*; several airports if you select
+several) in a small, draggable box on the radar screen, so you do not have to read and interpret the METAR yourself.
 
 > **For simulation use on the VATSIM network only. Never use it for real-world aviation.**
 > The plugin is a convenience aid, not an authoritative source. Always check the METAR and
@@ -53,6 +53,14 @@ RWY 18 TW: 13 (23) · CW: 5 (8) kts   <- per active runway; gusts in brackets
   restricted runway turns orange. Wintry weather (SN, SG, PL, GR, GS) rules out RRS even in VMC.
 * **Change of state:** if the state changes at the same airport, the box flashes for 10 seconds and a short
   "meep" is played. (Not on the first display, on an airport change or for "unknown".)
+* **Several airports** (e.g. as an approach controller): every airport that is selected in the airport/runway selector gets
+  its own entry (up to 8; the weather of each one is evaluated with its own METAR, runways and ATIS).
+  *Collapsed*, the header only says `WX` and the box has one row per airport: ICAO code (coloured like its state), wind
+  group and QNH. *Click a row* to select that airport; the box expands and shows it in detail as described above.
+  *Expanded*, a row of tabs with the ICAO codes sits below the header; click a tab to switch to another airport.
+  If the state of an airport changes, its row or tab flashes in the state colour **until you click it**; a changed QNH
+  flashes inverted until you click it (in the detail view: click the QNH, as before). The "meep" is played for every change.
+  With only one airport everything works as described above.
 * **Wind and QNH:** the main wind group (without the varying-direction group) and the QNH are shown in bold above the
   state, so the box can be used to read out the wind. If the QNH changes at the same airport, the same "meep" is played and the QNH
   flashes inverted **until you click on it** with the mouse (as a confirmation that you have seen it). The row stays visible when the box is collapsed (then the box consists of the header and this row). "WX <ICAO>" in the header is coloured like the state, so the weather state is also visible when collapsed.
@@ -97,7 +105,7 @@ The exact rules are documented in [`MetarParser.h`](MetarParser.h) and [`Display
 | Command                    | Effect                                                             |
 |----------------------------|--------------------------------------------------------------------|
 | `.wbox`                    | Show/hide the box                                                  |
-| `.wbox metar <METAR>`      | Use the given METAR instead of the live one (an `*` follows the station); handy for testing, also on a Sweatbox |
+| `.wbox metar <METAR>`      | Use the given METAR instead of the live one (an `*` follows the station; with several airports it applies to the first one); handy for testing, also on a Sweatbox |
 | `.wbox metar off`          | Use the live METAR again (also: `.wbox metar` without text)        |
 
 ## Building
@@ -114,7 +122,7 @@ created by Gergely Csernak, the author of EuroScope.
 
 ## Tests
 
-The METAR evaluation, wind components, RRS logic, texts and the data feed parser are covered by a small test program that needs neither
+The METAR evaluation, wind components, RRS logic, texts, the airport list and alert decisions, and the data feed parser are covered by a small test program that needs neither
 EuroScope nor MFC. Open a *Developer Command Prompt for VS* and run:
 
 ```
@@ -126,7 +134,7 @@ tests\run_tests.bat
 | File                          | Content                                                        |
 |-------------------------------|----------------------------------------------------------------|
 | `MetarParser.*`               | METAR evaluation (flight rules, visibility, ceiling, RVR, wind) |
-| `DisplayLogic.*`              | Detail line, wind lines, RRS decision and note (pure logic)    |
+| `DisplayLogic.*`              | Detail line, wind lines, RRS decision and note, airport list and alert decision (pure logic) |
 | `AtisParser.*`                | Reads the ATIS letters from the VATSIM data feed (JSON text)   |
 | `AtisFetcher.*`               | Background download of the data feed (WinHTTP)                 |
 | `MeepSound.*`                 | The change-of-state sound, generated in memory                 |

@@ -294,3 +294,42 @@ std::vector<std::string> BuildRvrLines(const MetarAssessment& a, const std::vect
 	}
 	return lines;
 }
+
+bool AddActiveAirport(std::vector<std::string>& airports, const char* name)
+{
+	if (name == nullptr)
+		return false;
+
+	std::string icao = name;
+	while (!icao.empty() && isspace((unsigned char)icao[icao.size() - 1]))
+		icao.erase(icao.size() - 1);
+	while (!icao.empty() && isspace((unsigned char)icao[0]))
+		icao.erase(0, 1);
+	if (icao.empty() || airports.size() >= MAX_BOX_AIRPORTS)
+		return false;
+
+	for (size_t i = 0; i < icao.size(); i++)
+		icao[i] = (char)toupper((unsigned char)icao[i]);
+
+	for (size_t i = 0; i < airports.size(); i++)
+		if (airports[i] == icao)
+			return false;
+
+	airports.push_back(icao);
+	return true;
+}
+
+AlertDecision DecideAlerts(bool known, FlightRules lastRules, FlightRules rules,
+	const std::string& lastQnh, const std::string& qnh)
+{
+	AlertDecision decision;
+	decision.stateChanged = known &&
+		rules != lastRules &&
+		rules != FlightRules::Unknown &&
+		lastRules != FlightRules::Unknown;
+	decision.qnhChanged = known &&
+		!qnh.empty() &&
+		!lastQnh.empty() &&
+		qnh != lastQnh;
+	return decision;
+}

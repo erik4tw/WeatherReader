@@ -77,3 +77,27 @@ struct RrsNote
 //   VMC: only if restricted, "RRS NOT POSSIBLE" or "RRS ONLY RWY 07, 18"
 //   LVO and unknown: no note
 RrsNote BuildRrsNote(const RrsResult& rrs);
+
+// ---------------------------------------------------------------------
+// Several airports (e.g. an approach controller who selects more than one airport)
+// ---------------------------------------------------------------------
+
+// Maximum number of airports shown in the box at the same time (further ones are ignored)
+const size_t MAX_BOX_AIRPORTS = 8;
+
+// Adds an airport (ICAO code in any case, surrounding spaces are ignored) to the list of active airports:
+// upper case, no duplicates, in the order of adding. Empty names and further airports beyond MAX_BOX_AIRPORTS
+// are ignored. Returns true if the airport was added.
+bool AddActiveAirport(std::vector<std::string>& airports, const char* name);
+
+// What has changed at one airport since the last update (decides about flashing and sound).
+struct AlertDecision
+{
+	bool stateChanged = false;	// the displayed state (VMC/IMC/LVO) has changed
+	bool qnhChanged = false;	// the QNH has changed
+};
+
+// known = the airport was already displayed at the last update (no alert on the first display of an airport).
+// There is no alert for the state "unknown" (before or after) and none for a missing QNH (before or after).
+AlertDecision DecideAlerts(bool known, FlightRules lastRules, FlightRules rules,
+	const std::string& lastQnh, const std::string& qnh);

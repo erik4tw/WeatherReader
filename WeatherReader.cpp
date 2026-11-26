@@ -67,6 +67,9 @@ namespace
 	// Type of the screen object for the QNH (clicking acknowledges a changed QNH)
 	const int SCREEN_OBJECT_QNH = 3;
 
+	// Type of the screen objects for the airport rows/tabs (several airports; the object id is the ICAO code)
+	const int SCREEN_OBJECT_AIRPORT = 4;
+
 	// How long the box flashes after a change of the weather state
 	const unsigned int FLASH_DURATION_MS = 10000;
 }
@@ -91,13 +94,12 @@ void __declspec(dllexport) EuroScopePlugInExit(void)
 CWeatherReaderPlugIn::CWeatherReaderPlugIn()
 	: CPlugIn(EuroScopePlugIn::COMPATIBILITY_CODE,
 		"WeatherReader",
-		"1.2.1",
+		"1.3.0",
 		"Erik J. - 1583954",
 		"See LICENSE in the repository")
-	, m_LastRules(FlightRules::Unknown)
 {
 	// Appears in the EuroScope message window when the plugin is loaded.
-	DisplayUserMessage("Message", "WeatherReader", "WeatherReader 1.2.1 loaded.",
+	DisplayUserMessage("Message", "WeatherReader", "WeatherReader 1.3.0 loaded.",
 		true, true, true, false, false);
 
 	m_Atis.Start();
@@ -109,9 +111,9 @@ CWeatherReaderPlugIn::~CWeatherReaderPlugIn()
 	m_Atis.Stop();		// the background thread must be gone before the DLL is unloaded
 }
 
-std::string CWeatherReaderPlugIn::FindActiveAirport()
+std::vector<std::string> CWeatherReaderPlugIn::FindActiveAirports()
 {
-	std::string result;
+	std::vector<std::string> airports;
 
 	// Search all airports of the active sector file: an airport is active if it is selected in the
 	// airport selector for departure or arrival (order as in the sector file).
@@ -122,39 +124,23 @@ std::string CWeatherReaderPlugIn::FindActiveAirport()
 		el = SectorFileElementSelectNext(el, EuroScopePlugIn::SECTOR_ELEMENT_AIRPORT))
 	{
 		if (el.IsElementActive(true) || el.IsElementActive(false))
-		{
-			const char* name = el.GetName();
-			if (name != nullptr)
-				result = name;
-			break;
-		}
+			AddActiveAirport(airports, el.GetName());
 	}
 
-	// If the airport itself is not reported as active: search via the active runways.
-	if (result.empty())
+	// If an airport itself is not reported as active: also look at the active runways (appended after the others).
+	for (EuroScopePlugIn::CSectorElement el = SectorFileElementSelectFirst(EuroScopePlugIn::SECTOR_ELEMENT_RUNWAY);
+		el.IsValid();
+		el = SectorFileElementSelectNext(el, EuroScopePlugIn::SECTOR_ELEMENT_RUNWAY))
 	{
-		for (EuroScopePlugIn::CSectorElement el = SectorFileElementSelectFirst(EuroScopePlugIn::SECTOR_ELEMENT_RUNWAY);
-			el.IsValid();
-			el = SectorFileElementSelectNext(el, EuroScopePlugIn::SECTOR_ELEMENT_RUNWAY))
-		{
-			bool active = false;
-			for (int index = 0; index < 2 && !active; index++)
-				active = el.IsElementActive(true, index) || el.IsElementActive(false, index);
+		bool active = false;
+		for (int index = 0; index < 2 && !active; index++)
+			active = el.IsElementActive(true, index) || el.IsElementActive(false, index);
 
-			if (active)
-			{
-				const char* name = el.GetAirportName();
-				if (name != nullptr)
-					result = name;
-				break;
-			}
-		}
+		if (active)
+			AddActiveAirport(airports, el.GetAirportName());
 	}
 
-	for (size_t i = 0; i < result.size(); i++)
-		result[i] = (char)toupper((unsigned char)result[i]);
-
-	return result;
+	return airports;
 }
 
 std::vector<int> CWeatherReaderPlugIn::FindActiveRunways(const std::string& station)
@@ -248,23 +234,53 @@ std::vector<std::string> CWeatherReaderPlugIn::FindLandingRunways(const std::str
 
 void CWeatherReaderPlugIn::UpdateBox()
 {
-	// Station = active airport from the airport selector (the same as for the METAR in the
+	// Stations = the active airports from the airport selector (the same as for the METAR in the
 	// top bar of EuroScope). If none is active, a dash is shown.
-	std::string station = FindActiveAirport();
+	std::vector<std::string> stations = FindActiveAirports();
 
-	std::string metar;
-	if (!station.empty())
+	// Forget airports that are no longer active (they start without alerts when they become active again)
+	for (std::map<std::string, AirportMemory>::iterator it = m_Memory.begin(); it != m_Memory.end(); )
 	{
-		if (!m_TestMetar.empty())
-		{
-			metar = m_TestMetar;	// test mode: the given METAR applies to the active airport
-		}
+		if (std::find(stations.begin(), stations.end(), it->first) == stations.end())
+			it = m_Memory.erase(it);
 		else
-		{
-			std::map<std::string, std::string>::const_iterator it = m_Metars.find(station);
-			if (it != m_Metars.end())
-				metar = it->second;
-		}
+			++it;
+	}
+
+	bool multi = stations.size() > 1;
+	bool playSound = false;
+	std::vector<WeatherBoxEntry> entries;
+	for (size_t i = 0; i < stations.size(); i++)
+		entries.push_back(BuildEntry(stations[i], i == 0 && !m_TestMetar.empty(), multi, playSound));
+
+	if (entries.empty())
+	{
+		WeatherBoxEntry none;
+		none.station = "-";
+		none.text = "-";
+		none.colour = RGB(170, 170, 170);
+		entries.push_back(none);
+	}
+
+	m_Box.SetEntries(entries);
+
+	// One sound for all changes of this update
+	if (playSound)
+		PlayChangeSound();
+}
+
+WeatherBoxEntry CWeatherReaderPlugIn::BuildEntry(const std::string& station, bool useTestMetar, bool multi, bool& playSound)
+{
+	std::string metar;
+	if (useTestMetar)
+	{
+		metar = m_TestMetar;	// test mode: the given METAR applies to this airport
+	}
+	else
+	{
+		std::map<std::string, std::string>::const_iterator it = m_Metars.find(station);
+		if (it != m_Metars.end())
+			metar = it->second;
 	}
 
 	// Weather state from the METAR: red = LVO, green = VMC, yellow = IMC (Reduced Runway Separation possible),
@@ -273,99 +289,108 @@ void CWeatherReaderPlugIn::UpdateBox()
 	MetarAssessment assessment = AssessMetar(metar.c_str());
 	FlightRules rules = assessment.rules;
 
+	WeatherBoxEntry entry;
+	entry.icao = station;
+
 	// Header: station, with an asterisk in test mode, followed by the time of the METAR (e.g. "EDDF <dot> 1420z")
-	std::string stationLabel = station.empty() ? "-" : station;
-	if (!station.empty() && !m_TestMetar.empty())
+	std::string stationLabel = station;
+	if (useTestMetar)
 		stationLabel += "*";
-	if (!station.empty() && assessment.haveObsTime)
+	if (assessment.haveObsTime)
 	{
 		char timeText[16];
 		sprintf_s(timeText, "%02d%02dz", assessment.obsHour, assessment.obsMinute);
 		stationLabel += SEPARATOR;
 		stationLabel += timeText;
 	}
-	const char* stationText = stationLabel.c_str();
+	entry.station = stationLabel;
 
 	// Active runways and wind components. With yellow weather the tailwind per runway decides whether
 	// Reduced Runway Separation is possible; if RRS is possible on no runway, the IMC is shown in orange.
-	std::vector<int> activeRunways;
-	if (!station.empty())
-		activeRunways = FindActiveRunways(station);
+	std::vector<int> activeRunways = FindActiveRunways(station);
 	std::vector<bool> tailwindOverLimit;
 	std::vector<std::string> windLines = BuildWindLines(assessment, activeRunways, tailwindOverLimit);
 	RrsResult rrs = EvaluateRrs(assessment, activeRunways, tailwindOverLimit);
 	rules = rrs.shown;
 
-	// If the displayed state changes at the same airport (e.g. VMC -> IMC), the box flashes for 10 seconds.
-	// If the QNH changes at the same airport, the QNH flashes inverted until the user clicks on it. Both play the same sound
-	// (once, if both change at the same time). There is no flashing or sound on the first display, on an
-	// airport change or for "unknown" (-) / a missing QNH.
-	bool stateChanged = station == m_LastStation &&
-		rules != m_LastRules &&
-		rules != FlightRules::Unknown &&
-		m_LastRules != FlightRules::Unknown;
-	bool qnhChanged = station == m_LastStation &&
-		!assessment.qnh.empty() &&
-		!m_LastQnh.empty() &&
-		assessment.qnh != m_LastQnh;
-	if (stateChanged)
-		m_Box.StartFlash(FLASH_DURATION_MS);
-	if (qnhChanged)
-		m_Box.StartQnhAlert();
-	if (station != m_LastStation || assessment.qnh.empty())
-		m_Box.AcknowledgeQnh();		// nothing to acknowledge for another airport or without QNH
-	if (stateChanged || qnhChanged)
-		PlayChangeSound();
-	m_LastStation = station;
-	m_LastRules = rules;
-	m_LastQnh = assessment.qnh;
+	// If the displayed state changes at the same airport (e.g. VMC -> IMC), the airport flashes: for 10 seconds with
+	// one airport, until it is clicked with several (it might be out of sight). If the QNH changes at the same
+	// airport, the QNH flashes inverted until the user clicks on it. Both play the same sound (once per update).
+	// There is no flashing or sound on the first display of an airport or for "unknown" (-) / a missing QNH.
+	bool known = m_Memory.find(station) != m_Memory.end();
+	AirportMemory& memory = m_Memory[station];
+	AlertDecision decision = DecideAlerts(known, memory.rules, rules, memory.qnh, assessment.qnh);
+	if (decision.stateChanged)
+		memory.alert.StartFlash(multi ? 0 : FLASH_DURATION_MS);
+	if (decision.qnhChanged)
+		memory.alert.StartQnhAlert();
+	if (assessment.qnh.empty())
+		memory.alert.Acknowledge(true);		// nothing to acknowledge without QNH
+	if (decision.stateChanged || decision.qnhChanged)
+		playSound = true;
+	memory.rules = rules;
+	memory.qnh = assessment.qnh;
+	entry.alert = memory.alert;
 
 	switch (rules)
 	{
 	case FlightRules::Lvo:
-		m_Box.SetContent(stationText, "LVO", RGB(230, 50, 50));
+		entry.text = "LVO";
+		entry.colour = RGB(230, 50, 50);
 		break;
 	case FlightRules::VMC:
-		m_Box.SetContent(stationText, "VMC", RGB(60, 200, 90));
+		entry.text = "VMC";
+		entry.colour = RGB(60, 200, 90);
 		break;
 	case FlightRules::ImcYellow:
-		m_Box.SetContent(stationText, "IMC", RGB(240, 200, 40));
+		entry.text = "IMC";
+		entry.colour = RGB(240, 200, 40);
 		break;
 	case FlightRules::ImcOrange:
-		m_Box.SetContent(stationText, "IMC", RGB(255, 140, 0));
+		entry.text = "IMC";
+		entry.colour = RGB(255, 140, 0);
 		break;
 	default:
-		m_Box.SetContent(stationText, "-", RGB(170, 170, 170));
+		entry.text = "-";
+		entry.colour = RGB(170, 170, 170);
 		break;
 	}
 
 	// Wind group and QNH as written in the METAR (bold row above the state)
-	m_Box.SetInfo(assessment.windGroup.c_str(), assessment.qnh.c_str());
+	entry.wind = assessment.windGroup;
+	entry.qnh = assessment.qnh;
 
 	// RVR rows: the RVR groups of the METAR for the landing runways (in the order of the METAR)
-	std::vector<std::string> landingRunways;
-	if (!station.empty())
-		landingRunways = FindLandingRunways(station);
-	m_Box.SetRvr(BuildRvrLines(assessment, landingRunways));
+	entry.rvrLines = BuildRvrLines(assessment, FindLandingRunways(station));
 
 	// ATIS letter(s) of the airport from the VATSIM data feed (left in the header)
-	std::string atisLabel;
-	if (!station.empty())
-		m_Atis.GetLabel(station, atisLabel);
-	m_Box.SetAtis(atisLabel.c_str());
+	m_Atis.GetLabel(station, entry.atis);
 
 	// RRS note, wind lines and the small line with the decisive values
-	// (all after SetContent, which clears them).
 	RrsNote note = BuildRrsNote(rrs);
 	if (note.present)
-		m_Box.SetNote(note.before.c_str(), note.bold.c_str(), note.after.c_str());
+	{
+		entry.noteBefore = note.before;
+		entry.noteBold = note.bold;
+		entry.noteAfter = note.after;
+	}
 
 	// Lines with too much tailwind turn orange as long as the weather would otherwise allow RRS.
-	std::vector<bool> warn;
+	entry.windLines = windLines;
 	if (rrs.weatherAllows)
-		warn = tailwindOverLimit;
-	m_Box.SetWindLines(windLines, warn);
-	m_Box.SetDetail(BuildDetail(assessment).c_str());
+		entry.windWarn = tailwindOverLimit;
+	entry.detail = BuildDetail(assessment);
+
+	return entry;
+}
+
+void CWeatherReaderPlugIn::AcknowledgeAirport(const std::string& icao, bool qnhOnly)
+{
+	std::map<std::string, AirportMemory>::iterator it = m_Memory.find(icao);
+	if (it != m_Memory.end())
+		it->second.alert.Acknowledge(qnhOnly);
+
+	m_Box.AcknowledgeAirport(icao, qnhOnly);
 }
 
 void CWeatherReaderPlugIn::PlayChangeSound()
@@ -436,7 +461,7 @@ bool CWeatherReaderPlugIn::OnCompileCommand(const char* sCommandLine)
 			case FlightRules::ImcOrange: result = "IMC orange (RRS not possible)"; break;
 			default: break;
 			}
-			message = std::string("Test METAR active for the active airport: ") + result + ". Remove with \".wbox metar off\".";
+			message = std::string("Test METAR active for the (first) active airport: ") + result + ". Remove with \".wbox metar off\".";
 		}
 
 		UpdateBox();
@@ -550,6 +575,11 @@ void CWeatherRadarScreen::OnRefresh(HDC hDC, int Phase)
 		// The arrow is registered after the box so that it takes precedence on a click
 		AddScreenObject(SCREEN_OBJECT_TOGGLE, "WeatherBoxToggle", box.GetToggleRect(), false, "");
 
+		// Several airports: every row (collapsed) or tab (expanded) can be clicked to select the airport
+		const std::vector<CWeatherBox::AirportHit>& hits = box.GetAirportHits();
+		for (size_t i = 0; i < hits.size(); i++)
+			AddScreenObject(SCREEN_OBJECT_AIRPORT, hits[i].icao.c_str(), hits[i].rc, false, "");
+
 		// While the QNH flashes, it can be clicked to acknowledge it
 		if (box.IsQnhAlert())
 			AddScreenObject(SCREEN_OBJECT_QNH, "WeatherBoxQnh", box.GetQnhRect(), false, "");
@@ -578,15 +608,45 @@ void CWeatherRadarScreen::OnClickScreenObject(int ObjectType, const char* sObjec
 
 	CWeatherBox& box = m_Box;
 
-	// A click on the flashing QNH acknowledges the change. The central box (content for all screens) is the one
+	// Several airports: a click on a row or tab selects the airport, stops its flashing and, if the box is
+	// collapsed, expands it to show the airport in detail. (To be safe, also a click on the box itself that
+	// falls on a row or tab counts.)
+	std::string clickedAirport;
+	if (ObjectType == SCREEN_OBJECT_AIRPORT && sObjectId != nullptr)
+	{
+		clickedAirport = sObjectId;
+	}
+	else if (ObjectType == SCREEN_OBJECT_BOX)
+	{
+		const std::vector<CWeatherBox::AirportHit>& hits = box.GetAirportHits();
+		for (size_t i = 0; i < hits.size() && clickedAirport.empty(); i++)
+			if (PtInRect(&hits[i].rc, Pt) != FALSE)
+				clickedAirport = hits[i].icao;
+	}
+	if (!clickedAirport.empty())
+	{
+		box.SelectAirport(clickedAirport);
+		box.AcknowledgeAirport(clickedAirport, false);
+		m_pOwner->AcknowledgeAirport(clickedAirport, false);
+		if (box.IsCollapsed())
+		{
+			box.SetCollapsed(false);
+			m_pOwner->SaveBoxLayout(m_Key.c_str(), box);
+		}
+		RequestRefresh();
+		return;
+	}
+
+	// A click on the flashing QNH acknowledges the change. The central state (content for all screens) is the one
 	// that counts, this screen's copy is updated at the next refresh.
 	bool qnh = (ObjectType == SCREEN_OBJECT_QNH);
 	if (!qnh && ObjectType == SCREEN_OBJECT_BOX && box.IsQnhAlert())
 		qnh = (PtInRect(&box.GetQnhRect(), Pt) != FALSE);
 	if (qnh)
 	{
-		box.AcknowledgeQnh();
-		m_pOwner->GetBox().AcknowledgeQnh();
+		std::string selected = box.GetSelectedIcao();
+		box.AcknowledgeAirport(selected, true);
+		m_pOwner->AcknowledgeAirport(selected, true);
 		RequestRefresh();
 		return;
 	}

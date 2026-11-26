@@ -809,6 +809,73 @@ static void TestMeepSound()
 }
 
 // ---------------------------------------------------------------------
+// Several airports: list of the active airports and the decision about alerts
+// ---------------------------------------------------------------------
+
+static void TestMultiAirport()
+{
+	// Airport list: upper case, no duplicates, trimmed, order as added
+	std::vector<std::string> airports;
+	CHECK(AddActiveAirport(airports, "EDDF"));
+	CHECK(AddActiveAirport(airports, "edfh "));				// padded like the airport name of a runway, lower case
+	CHECK(!AddActiveAirport(airports, "EDDF "));			// duplicate (after trimming)
+	CHECK(!AddActiveAirport(airports, "edfh"));				// duplicate, different case
+	CHECK(!AddActiveAirport(airports, ""));					// empty
+	CHECK(!AddActiveAirport(airports, "   "));
+	CHECK(!AddActiveAirport(airports, nullptr));
+	CHECK(AddActiveAirport(airports, "EDDS"));
+	CHECK_INT((int)airports.size(), 3);
+	CHECK_TEXT(airports[0], "EDDF");
+	CHECK_TEXT(airports[1], "EDFH");
+	CHECK_TEXT(airports[2], "EDDS");
+
+	// At most MAX_BOX_AIRPORTS
+	std::vector<std::string> many;
+	for (int i = 0; i < 20; i++)
+	{
+		char code[8];
+		snprintf(code, sizeof(code), "ED%c%c", 'A' + i / 5, 'A' + i % 5);
+		AddActiveAirport(many, code);
+	}
+	CHECK_INT((int)many.size(), (int)MAX_BOX_AIRPORTS);
+	CHECK(!AddActiveAirport(many, "LOWW"));
+
+	// Alerts: nothing on the first display of an airport
+	AlertDecision d = DecideAlerts(false, U, V, "", "Q1018");
+	CHECK(!d.stateChanged && !d.qnhChanged);
+	d = DecideAlerts(false, V, Y, "Q1018", "Q1010");		// "unknown to the box" wins over the values
+	CHECK(!d.stateChanged && !d.qnhChanged);
+
+	// State change at a known airport
+	d = DecideAlerts(true, V, Y, "Q1018", "Q1018");
+	CHECK(d.stateChanged && !d.qnhChanged);
+	d = DecideAlerts(true, Y, O, "Q1018", "Q1018");
+	CHECK(d.stateChanged);
+	d = DecideAlerts(true, V, L, "Q1018", "Q1018");
+	CHECK(d.stateChanged);
+
+	// No alert for "unknown" before or after, nor for an unchanged state
+	d = DecideAlerts(true, U, V, "Q1018", "Q1018");
+	CHECK(!d.stateChanged);
+	d = DecideAlerts(true, V, U, "Q1018", "Q1018");
+	CHECK(!d.stateChanged);
+	d = DecideAlerts(true, V, V, "Q1018", "Q1018");
+	CHECK(!d.stateChanged && !d.qnhChanged);
+
+	// QNH change; none without a QNH before or after
+	d = DecideAlerts(true, V, V, "Q1018", "Q1019");
+	CHECK(!d.stateChanged && d.qnhChanged);
+	d = DecideAlerts(true, V, V, "", "Q1019");
+	CHECK(!d.qnhChanged);
+	d = DecideAlerts(true, V, V, "Q1019", "");
+	CHECK(!d.qnhChanged);
+
+	// Both at once
+	d = DecideAlerts(true, V, O, "Q1018", "A2992");
+	CHECK(d.stateChanged && d.qnhChanged);
+}
+
+// ---------------------------------------------------------------------
 
 int main()
 {
@@ -824,6 +891,7 @@ int main()
 	TestRvrRows();
 	TestAtisFeed();
 	TestMeepSound();
+	TestMultiAirport();
 
 	printf("%d checks, %d failures\n", g_tests, g_failures);
 	return g_failures == 0 ? 0 : 1;

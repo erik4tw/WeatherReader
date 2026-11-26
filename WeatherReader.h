@@ -46,7 +46,8 @@ public:
 
 	// Called when a dot command is entered in the EuroScope command line.
 	//   .wbox                 show/hide the box
-	//   .wbox metar <METAR>   use a test METAR instead of the live METAR (for testing)
+	//   .wbox metar <METAR>   use a test METAR instead of the live METAR (for testing; with several active airports
+	//                         it applies to the first one)
 	//   .wbox metar           (without text) or ".wbox metar off": use the live METAR again
 	virtual bool OnCompileCommand(const char* sCommandLine);
 
@@ -63,14 +64,22 @@ public:
 
 	CWeatherBox& GetBox() { return m_Box; }
 
+	// Stops the flashing of an airport (clicked in a radar screen): only its QNH, or state and QNH.
+	void AcknowledgeAirport(const std::string& icao, bool qnhOnly);
+
 	// Saves/loads position and collapsed state of the box of a screen type (sScreenKey e.g. "Ground")
 	// in the EuroScope settings (settings file).
 	void SaveBoxLayout(const char* sScreenKey, const CWeatherBox& box);
 	void LoadBoxLayout(const char* sScreenKey, CWeatherBox& box);
 
 private:
-	// Updates station and weather state in the box.
+	// Updates the entries of the box: one per active airport (several if e.g. an approach controller selected
+	// more than one airport).
 	void UpdateBox();
+
+	// Builds the entry of one airport: weather state, texts, ATIS, and the flashing/sound decision (playSound is set
+	// to true on a change). useTestMetar: the test METAR applies to this airport. multi: several airports are shown.
+	WeatherBoxEntry BuildEntry(const std::string& station, bool useTestMetar, bool multi, bool& playSound);
 
 	// Returns the runway numbers (e.g. 25 for 25L, 25C and 25R; 18 for 18) that are active in the airport selector
 	// as departure or arrival runway for the airport station, ascending and without duplicates.
@@ -83,16 +92,21 @@ private:
 	// Plays the short "meep" (change of the weather state).
 	void PlayChangeSound();
 
-	// Returns the airport that is active in the "Active airport/runway selector dialog" (e.g. "EDDK"),
-	// empty if none is active.
-	std::string FindActiveAirport();
+	// Returns the airports that are active in the "Active airport/runway selector dialog" (e.g. "EDDK"),
+	// upper case, in the order of the sector file; empty if none is active.
+	std::vector<std::string> FindActiveAirports();
 
-	CWeatherBox m_Box;	// the info box with station and weather state
+	CWeatherBox m_Box;	// the info box with the entries of all active airports
 
-	// Last displayed state: on a change at the same airport the box flashes
-	std::string m_LastStation;
-	FlightRules m_LastRules;
-	std::string m_LastQnh;	// last displayed QNH: on a change at the same airport the QNH flashes until clicked
+	// Last displayed state per airport: on a change at the same airport the airport flashes (state) or its
+	// QNH flashes (until clicked). An airport that is no longer active is forgotten.
+	struct AirportMemory
+	{
+		FlightRules rules = FlightRules::Unknown;
+		std::string qnh;
+		WeatherBoxAlert alert;
+	};
+	std::map<std::string, AirportMemory> m_Memory;
 
 	// Test METAR (set via ".wbox metar ..."); empty = use the live METAR
 	std::string m_TestMetar;
