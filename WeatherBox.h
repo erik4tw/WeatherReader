@@ -11,7 +11,8 @@
 // wind/QNH row are visible.
 //
 // Several airports: when collapsed, the header only says "WX" and below it there is one row per airport with
-// the ICAO code (in the colour of its weather state), the wind group and the QNH. A click on a row selects the
+// the ATIS letter (light blue, if known), the ICAO code (in the colour of its weather state), the wind group and
+// the QNH. A click on a row selects the
 // airport and expands the box. When expanded, a row of tabs with the ICAO codes sits below the header; the
 // selected airport is shown in detail as described above. A click on another tab selects that airport.
 // A change at an airport (state or QNH) makes its row or tab flash until it is clicked.

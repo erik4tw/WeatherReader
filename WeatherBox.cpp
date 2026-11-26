@@ -308,6 +308,7 @@ bool CWeatherBox::Draw(HDC hDC, const RECT& area)
 	// width on both sides, so that the header stays centred).
 	int width = ScaleDpi(BOX_WIDTH, dpi);
 	int icaoColumn = 0;		// width of the ICAO column of the rows
+	int atisColumn = 0;		// width of the ATIS column of the rows (0 if no airport has an ATIS letter)
 	int tabsWidth = 0;		// width of all tabs together
 	for (size_t i = 0; i < list.size(); i++)
 	{
@@ -345,16 +346,21 @@ bool CWeatherBox::Draw(HDC hDC, const RECT& area)
 			int icaoWidth = MeasureText(hDC, x.icao, hInfoFont);
 			if (icaoWidth > icaoColumn)
 				icaoColumn = icaoWidth;
+			int atisWidth = MeasureText(hDC, x.atis, hInfoFont);
+			if (atisWidth > atisColumn)
+				atisColumn = atisWidth;
 			tabsWidth += icaoWidth + 2 * tabPad;
 		}
 	}
 	if (multi)
 	{
-		// Rows: ICAO column, wind group and QNH side by side; tabs side by side
+		// Rows: ATIS letter, ICAO column, wind group and QNH side by side; tabs side by side
+		if (atisColumn > 0)
+			atisColumn += rowGap / 2;		// small gap between the ATIS letter and the ICAO code
 		for (size_t i = 0; i < list.size(); i++)
 		{
 			const WeatherBoxEntry& x = list[i];
-			int rowWidth = icaoColumn + rowGap + MeasureText(hDC, x.wind, hInfoFont) + rowGap +
+			int rowWidth = atisColumn + icaoColumn + rowGap + MeasureText(hDC, x.wind, hInfoFont) + rowGap +
 				MeasureText(hDC, x.qnh, hInfoFont) + 2 * sidePadding;
 			if (rowWidth > width)
 				width = rowWidth;
@@ -474,7 +480,7 @@ bool CWeatherBox::Draw(HDC hDC, const RECT& area)
 
 	if (listMode)
 	{
-		// Several airports, collapsed: one row per airport with ICAO (state colour), wind group and QNH.
+		// Several airports, collapsed: one row per airport with ATIS letter, ICAO (state colour), wind group and QNH.
 		// A row whose state has changed is filled with the state colour until it is clicked; a changed QNH
 		// flashes inverted as in the single view.
 		for (size_t i = 0; i < list.size(); i++)
@@ -494,11 +500,19 @@ bool CWeatherBox::Draw(HDC hDC, const RECT& area)
 			}
 
 			RECT rcInfo = { m_rc.left + sidePadding, top, m_rc.right - sidePadding, top + rowHeight };
-			DrawBoxText(hDC, x.icao, rcInfo, hInfoFont, rowFlash ? darkColour : x.colour,
+
+			// ATIS letter(s) before the ICAO code (light blue as in the header; dark on a flashing row)
+			if (!x.atis.empty())
+				DrawBoxText(hDC, x.atis, rcInfo, hInfoFont, rowFlash ? darkColour : RGB(120, 190, 255),
+					DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+			RECT rcIcao = rcInfo;
+			rcIcao.left += atisColumn;
+			DrawBoxText(hDC, x.icao, rcIcao, hInfoFont, rowFlash ? darkColour : x.colour,
 				DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
 			RECT rcWind = rcInfo;
-			rcWind.left += icaoColumn + rowGap;
+			rcWind.left += atisColumn + icaoColumn + rowGap;
 			DrawBoxText(hDC, x.wind, rcWind, hInfoFont, rowFlash ? darkColour : infoColour,
 				DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 

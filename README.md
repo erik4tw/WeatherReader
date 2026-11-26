@@ -55,8 +55,8 @@ RWY 18 TW: 13 (23) · CW: 5 (8) kts   <- per active runway; gusts in brackets
   "meep" is played. (Not on the first display, on an airport change or for "unknown".)
 * **Several airports** (e.g. as an approach controller): every airport that is selected in the airport/runway selector gets
   its own entry (up to 8; the weather of each one is evaluated with its own METAR, runways and ATIS).
-  *Collapsed*, the header only says `WX` and the box has one row per airport: ICAO code (coloured like its state), wind
-  group and QNH. *Click a row* to select that airport; the box expands and shows it in detail as described above.
+  *Collapsed*, the header only says `WX` and the box has one row per airport: ATIS letter (blue, if known), ICAO code
+  (coloured like its state), wind group and QNH, so you can see the ATIS of every airport without expanding the box. *Click a row* to select that airport; the box expands and shows it in detail as described above.
   *Expanded*, a row of tabs with the ICAO codes sits below the header; click a tab to switch to another airport.
   If the state of an airport changes, its row or tab flashes in the state colour **until you click it**; a changed QNH
   flashes inverted until you click it (in the detail view: click the QNH, as before). The "meep" is played for every change.
